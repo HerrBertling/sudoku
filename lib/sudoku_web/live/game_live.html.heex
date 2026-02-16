@@ -1,4 +1,4 @@
-<div class="flex flex-col items-center gap-4 py-4 h-[calc(100vh-4rem)]" phx-window-keydown="keydown">
+<div id="sudoku-game" phx-hook="BoardPersistence" class="flex flex-col items-center gap-4 py-4 h-[calc(100vh-4rem)]" phx-window-keydown="keydown">
   <h1 class="text-3xl font-bold shrink-0">Sudoku</h1>
 
   <div :if={@board.status == :complete} class="alert alert-success w-auto shrink-0">

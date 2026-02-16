@@ -8,6 +8,30 @@ defmodule SudokuWeb.GameLive do
   end
 
   @impl true
+  def handle_event("restore_board", %{"cells" => cells_data, "difficulty" => difficulty}, socket) do
+    cells =
+      Enum.map(cells_data, fn c ->
+        %Sudoku.Game.Cell{
+          row: c["row"],
+          col: c["col"],
+          value: c["value"],
+          given: c["given"],
+          valid: c["valid"]
+        }
+      end)
+
+    board = %Sudoku.Game.Board{
+      id: Ash.UUID.generate(),
+      cells: cells,
+      status: if(Enum.all?(cells, & &1.value) && Enum.all?(cells, & &1.valid), do: :complete, else: :playing),
+      difficulty: String.to_existing_atom(difficulty),
+      selected_row: nil,
+      selected_col: nil
+    }
+
+    {:noreply, assign(socket, board: board)}
+  end
+
   def handle_event("select_cell", %{"row" => row, "col" => col}, socket) do
     row = String.to_integer(row)
     col = String.to_integer(col)
@@ -23,8 +47,11 @@ defmodule SudokuWeb.GameLive do
       value = if number == "clear", do: nil, else: String.to_integer(number)
 
       case Sudoku.Game.place_number(board, row, col, value) do
-        {:ok, new_board} -> {:noreply, assign(socket, board: new_board)}
-        {:error, _} -> {:noreply, socket}
+        {:ok, new_board} ->
+          {:noreply, socket |> assign(board: new_board) |> push_save(new_board)}
+
+        {:error, _} ->
+          {:noreply, socket}
       end
     else
       _ -> {:noreply, socket}
@@ -60,7 +87,7 @@ defmodule SudokuWeb.GameLive do
 
   def handle_event("new_game", %{"difficulty" => difficulty}, socket) do
     board = Sudoku.Game.new_game!(String.to_existing_atom(difficulty))
-    {:noreply, assign(socket, board: board)}
+    {:noreply, socket |> assign(board: board) |> push_save(board)}
   end
 
   defp cell_classes(cell, board) do
@@ -117,5 +144,15 @@ defmodule SudokuWeb.GameLive do
 
       MapSet.difference(MapSet.new(1..9), used)
     end
+  end
+
+  defp push_save(socket, board) do
+    push_event(socket, "save_board", %{
+      difficulty: board.difficulty,
+      cells:
+        Enum.map(board.cells, fn c ->
+          %{row: c.row, col: c.col, value: c.value, given: c.given, valid: c.valid}
+        end)
+    })
   end
 end

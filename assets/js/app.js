@@ -25,11 +25,34 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/sudoku"
 import topbar from "../vendor/topbar"
 
+const STORAGE_KEY = "sudoku_board"
+
+const BoardPersistence = {
+  mounted() {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved) {
+      try {
+        this.pushEvent("restore_board", JSON.parse(saved))
+      } catch (_) {
+        localStorage.removeItem(STORAGE_KEY)
+      }
+    }
+
+    this.handleEvent("save_board", (data) => {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+    })
+
+    this.handleEvent("clear_board", () => {
+      localStorage.removeItem(STORAGE_KEY)
+    })
+  }
+}
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks},
+  hooks: {...colocatedHooks, BoardPersistence},
 })
 
 // Show progress bar on live navigation and form submits
