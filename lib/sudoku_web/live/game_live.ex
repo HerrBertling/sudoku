@@ -4,7 +4,7 @@ defmodule SudokuWeb.GameLive do
   @impl true
   def mount(_params, _session, socket) do
     board = Sudoku.Game.new_game!(:medium)
-    {:ok, assign(socket, board: board, page_title: "Sudoku")}
+    {:ok, assign(socket, board: board, page_title: "Sudoku", highlighted_number: nil)}
   end
 
   @impl true
@@ -85,12 +85,21 @@ defmodule SudokuWeb.GameLive do
 
   def handle_event("keydown", _params, socket), do: {:noreply, socket}
 
-  def handle_event("new_game", %{"difficulty" => difficulty}, socket) do
-    board = Sudoku.Game.new_game!(String.to_existing_atom(difficulty))
-    {:noreply, socket |> assign(board: board) |> push_save(board)}
+  def handle_event("toggle_highlight", %{"number" => number_str}, socket) do
+    number = String.to_integer(number_str)
+
+    highlighted =
+      if socket.assigns.highlighted_number == number, do: nil, else: number
+
+    {:noreply, assign(socket, highlighted_number: highlighted)}
   end
 
-  defp cell_classes(cell, board) do
+  def handle_event("new_game", %{"difficulty" => difficulty}, socket) do
+    board = Sudoku.Game.new_game!(String.to_existing_atom(difficulty))
+    {:noreply, socket |> assign(board: board, highlighted_number: nil) |> push_save(board)}
+  end
+
+  defp cell_classes(cell, board, blocked_cells) do
     base = "flex items-center justify-center aspect-square cursor-pointer select-none border border-base-300 transition-colors"
 
     selected =
@@ -106,8 +115,18 @@ defmodule SudokuWeb.GameLive do
         do: " bg-base-200",
         else: ""
 
-    # Selected takes priority over highlighted
-    bg = if selected != "", do: selected, else: highlighted
+    blocked =
+      if {cell.row, cell.col} in blocked_cells,
+        do: " !bg-warning/20",
+        else: ""
+
+    # Selected > blocked > highlighted
+    bg =
+      cond do
+        selected != "" -> selected
+        blocked != "" -> blocked
+        true -> highlighted
+      end
 
     given = if cell.given, do: " font-bold text-base-content", else: " text-primary"
 
@@ -123,6 +142,28 @@ defmodule SudokuWeb.GameLive do
     border_top = if cell.row == 0, do: "", else: ""
 
     base <> bg <> given <> invalid <> border_right <> border_bottom <> border_left <> border_top
+  end
+
+  defp blocked_cells_for(nil, _board), do: MapSet.new()
+
+  defp blocked_cells_for(number, board) do
+    # Find all cells that already have this number
+    sources = Enum.filter(board.cells, &(&1.value == number))
+
+    # Every cell sharing a row, column, or box with a source is blocked
+    sources
+    |> Enum.flat_map(fn src ->
+      box_row = div(src.row, 3)
+      box_col = div(src.col, 3)
+
+      board.cells
+      |> Enum.filter(fn c ->
+        c.row == src.row || c.col == src.col ||
+          (div(c.row, 3) == box_row && div(c.col, 3) == box_col)
+      end)
+      |> Enum.map(&{&1.row, &1.col})
+    end)
+    |> MapSet.new()
   end
 
   defp candidates(cell, board) do

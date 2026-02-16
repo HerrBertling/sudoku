@@ -19,10 +19,11 @@
   </div>
 
   <div class="flex-1 min-h-0 w-full flex items-center justify-center">
+    <% blocked = blocked_cells_for(@highlighted_number, @board) %>
     <div class="grid grid-cols-9 border-2 border-base-content rounded aspect-square max-h-full max-w-full h-full w-auto">
       <div
         :for={cell <- @board.cells}
-        class={cell_classes(cell, @board)}
+        class={cell_classes(cell, @board, blocked)}
         phx-click="select_cell"
         phx-value-row={cell.row}
         phx-value-col={cell.col}
@@ -41,17 +42,17 @@
     </div>
   </div>
 
-  <div class="flex gap-2 shrink-0">
+  <div class="flex gap-2 shrink-0 items-center">
     <button
       :for={n <- 1..9}
-      class="btn btn-sm btn-outline min-w-[2.5rem]"
-      phx-click="place_number"
+      class={[
+        "btn btn-sm min-w-[2.5rem]",
+        if(@highlighted_number == n, do: "btn-warning", else: "btn-outline")
+      ]}
+      phx-click="toggle_highlight"
       phx-value-number={n}
     >
       {n}
-    </button>
-    <button class="btn btn-sm btn-ghost" phx-click="place_number" phx-value-number="clear">
-      Clear
     </button>
   </div>
 
@@ -67,6 +68,6 @@
   </div>
 
   <p class="text-sm text-base-content/60 shrink-0">
-    Click a cell, then use number buttons or keyboard (1-9, Backspace to clear)
+    Click a cell, then use keyboard (1-9, Backspace to clear). Number buttons highlight blocked areas.
   </p>
 </div>
