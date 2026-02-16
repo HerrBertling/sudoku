@@ -63,13 +63,15 @@ defmodule Sudoku.Game.Generator do
     board |> Enum.zip() |> Enum.map(&Tuple.to_list/1)
   end
 
-  defp remove_cells(board, count) do
-    all_positions = for row <- 0..8, col <- 0..8, do: {row, col}
-    to_remove = all_positions |> Enum.shuffle() |> Enum.take(count) |> MapSet.new()
+  defp remove_cells(board, target_removals) do
+    grid = board_to_grid(board)
+    shuffled = Enum.shuffle(for r <- 0..8, c <- 0..8, do: {r, c})
 
-    for {row_vals, row} <- Enum.with_index(board),
+    final_grid = remove_one_at_a_time(grid, shuffled, 0, target_removals)
+
+    for {row_vals, row} <- Enum.with_index(final_grid),
         {val, col} <- Enum.with_index(row_vals) do
-      given = {row, col} not in to_remove
+      given = val != 0
 
       %Sudoku.Game.Cell{
         row: row,
@@ -79,5 +81,22 @@ defmodule Sudoku.Game.Generator do
         valid: true
       }
     end
+  end
+
+  defp remove_one_at_a_time(grid, _positions, removed, target) when removed >= target, do: grid
+  defp remove_one_at_a_time(grid, [], _removed, _target), do: grid
+
+  defp remove_one_at_a_time(grid, [{r, c} | rest], removed, target) do
+    candidate = List.update_at(grid, r, fn row -> List.replace_at(row, c, 0) end)
+
+    if Sudoku.Game.Solver.count_solutions(candidate, 2) == 1 do
+      remove_one_at_a_time(candidate, rest, removed + 1, target)
+    else
+      remove_one_at_a_time(grid, rest, removed, target)
+    end
+  end
+
+  defp board_to_grid(board) do
+    Enum.map(board, fn row -> Enum.map(row, & &1) end)
   end
 end
