@@ -4,11 +4,13 @@ defmodule SudokuWeb.GameLive do
   @impl true
   def mount(_params, _session, socket) do
     board = Sudoku.Game.new_game!(:medium)
-    {:ok, assign(socket, board: board, page_title: "Sudoku", highlighted_number: nil)}
+    {:ok, assign(socket, board: board, page_title: "Sudoku", highlighted_number: nil, excluded_candidates: %{})}
   end
 
   @impl true
-  def handle_event("restore_board", %{"cells" => cells_data, "difficulty" => difficulty}, socket) do
+  def handle_event("restore_board", params, socket) do
+    %{"cells" => cells_data, "difficulty" => difficulty} = params
+
     cells =
       Enum.map(cells_data, fn c ->
         %Sudoku.Game.Cell{
@@ -29,7 +31,18 @@ defmodule SudokuWeb.GameLive do
       selected_col: nil
     }
 
-    {:noreply, assign(socket, board: board)}
+    excluded =
+      case params do
+        %{"excluded" => exc} when is_map(exc) ->
+          Map.new(exc, fn {key, vals} ->
+            {key, MapSet.new(vals)}
+          end)
+
+        _ ->
+          %{}
+      end
+
+    {:noreply, assign(socket, board: board, excluded_candidates: excluded)}
   end
 
   def handle_event("select_cell", %{"row" => row, "col" => col}, socket) do
@@ -48,7 +61,14 @@ defmodule SudokuWeb.GameLive do
 
       case Sudoku.Game.place_number(board, row, col, value) do
         {:ok, new_board} ->
-          {:noreply, socket |> assign(board: new_board) |> push_save(new_board)}
+          # Clear exclusions for this cell when placing a value
+          key = "#{row},#{col}"
+          excluded = Map.delete(socket.assigns.excluded_candidates, key)
+
+          {:noreply,
+           socket
+           |> assign(board: new_board, excluded_candidates: excluded)
+           |> push_save(new_board, excluded)}
 
         {:error, _} ->
           {:noreply, socket}
@@ -56,6 +76,31 @@ defmodule SudokuWeb.GameLive do
     else
       _ -> {:noreply, socket}
     end
+  end
+
+  def handle_event("toggle_candidate", %{"row" => row, "col" => col, "number" => number}, socket) do
+    row = String.to_integer(row)
+    col = String.to_integer(col)
+    number = String.to_integer(number)
+    key = "#{row},#{col}"
+
+    excluded = socket.assigns.excluded_candidates
+    cell_excluded = Map.get(excluded, key, MapSet.new())
+
+    cell_excluded =
+      if number in cell_excluded,
+        do: MapSet.delete(cell_excluded, number),
+        else: MapSet.put(cell_excluded, number)
+
+    excluded =
+      if MapSet.size(cell_excluded) == 0,
+        do: Map.delete(excluded, key),
+        else: Map.put(excluded, key, cell_excluded)
+
+    {:noreply,
+     socket
+     |> assign(excluded_candidates: excluded)
+     |> push_save(socket.assigns.board, excluded)}
   end
 
   def handle_event("keydown", %{"key" => key}, socket) when key in ~w(1 2 3 4 5 6 7 8 9) do
@@ -96,7 +141,8 @@ defmodule SudokuWeb.GameLive do
 
   def handle_event("new_game", %{"difficulty" => difficulty}, socket) do
     board = Sudoku.Game.new_game!(String.to_existing_atom(difficulty))
-    {:noreply, socket |> assign(board: board, highlighted_number: nil) |> push_save(board)}
+    excluded = %{}
+    {:noreply, socket |> assign(board: board, highlighted_number: nil, excluded_candidates: excluded) |> push_save(board, excluded)}
   end
 
   defp cell_classes(cell, board, blocked_cells) do
@@ -144,31 +190,45 @@ defmodule SudokuWeb.GameLive do
     base <> bg <> given <> invalid <> border_right <> border_bottom <> border_left <> border_top
   end
 
-  defp blocked_cells_for(nil, _board), do: MapSet.new()
+  defp blocked_cells_for(nil, _board, _excluded), do: MapSet.new()
 
-  defp blocked_cells_for(number, board) do
-    # Find all cells that already have this number
+  defp blocked_cells_for(number, board, excluded) do
+    # Cells blocked by Sudoku constraints
     sources = Enum.filter(board.cells, &(&1.value == number))
 
-    # Every cell sharing a row, column, or box with a source is blocked
-    sources
-    |> Enum.flat_map(fn src ->
-      box_row = div(src.row, 3)
-      box_col = div(src.col, 3)
+    constraint_blocked =
+      sources
+      |> Enum.flat_map(fn src ->
+        box_row = div(src.row, 3)
+        box_col = div(src.col, 3)
 
-      board.cells
-      |> Enum.filter(fn c ->
-        c.row == src.row || c.col == src.col ||
-          (div(c.row, 3) == box_row && div(c.col, 3) == box_col)
+        board.cells
+        |> Enum.filter(fn c ->
+          c.row == src.row || c.col == src.col ||
+            (div(c.row, 3) == box_row && div(c.col, 3) == box_col)
+        end)
+        |> Enum.map(&{&1.row, &1.col})
       end)
-      |> Enum.map(&{&1.row, &1.col})
-    end)
-    |> MapSet.new()
+      |> MapSet.new()
+
+    # Cells where user manually excluded this number
+    user_blocked =
+      excluded
+      |> Enum.filter(fn {_key, vals} -> number in vals end)
+      |> Enum.map(fn {key, _vals} ->
+        [r, c] = String.split(key, ",") |> Enum.map(&String.to_integer/1)
+        {r, c}
+      end)
+      |> MapSet.new()
+
+    MapSet.union(constraint_blocked, user_blocked)
   end
 
-  defp candidates(cell, board) do
+  # Returns {possible_by_rules, visible_candidates} where possible_by_rules
+  # is before user exclusions and visible_candidates is after.
+  defp cell_candidates(cell, board, excluded) do
     if cell.value || cell.given do
-      MapSet.new()
+      {MapSet.new(), MapSet.new()}
     else
       filled = board.cells |> Enum.filter(& &1.value)
       box_row = div(cell.row, 3)
@@ -183,17 +243,26 @@ defmodule SudokuWeb.GameLive do
         |> Enum.map(& &1.value)
         |> MapSet.new()
 
-      MapSet.difference(MapSet.new(1..9), used)
+      possible = MapSet.difference(MapSet.new(1..9), used)
+      cell_excluded = Map.get(excluded, "#{cell.row},#{cell.col}", MapSet.new())
+      {possible, MapSet.difference(possible, cell_excluded)}
     end
   end
 
-  defp push_save(socket, board) do
+  defp excluded?(cell, number, excluded) do
+    cell_excluded = Map.get(excluded, "#{cell.row},#{cell.col}", MapSet.new())
+    number in cell_excluded
+  end
+
+  defp push_save(socket, board, excluded) do
     push_event(socket, "save_board", %{
       difficulty: board.difficulty,
       cells:
         Enum.map(board.cells, fn c ->
           %{row: c.row, col: c.col, value: c.value, given: c.given, valid: c.valid}
-        end)
+        end),
+      excluded:
+        Map.new(excluded, fn {key, vals} -> {key, MapSet.to_list(vals)} end)
     })
   end
 end
