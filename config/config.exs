@@ -44,7 +44,8 @@ config :spark,
   ]
 
 config :sudoku,
-  generators: [timestamp_type: :utc_datetime]
+  generators: [timestamp_type: :utc_datetime],
+  ash_domains: [Sudoku.Game]
 
 # Configure the endpoint
 config :sudoku, SudokuWeb.Endpoint,
