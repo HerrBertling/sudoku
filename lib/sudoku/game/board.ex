@@ -19,7 +19,7 @@ defmodule Sudoku.Game.Board do
     end
 
     attribute :difficulty, :atom do
-      constraints one_of: [:easy, :medium, :hard]
+      constraints one_of: [:easy, :medium, :hard, :custom]
       default :medium
       public? true
     end

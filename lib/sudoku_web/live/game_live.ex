@@ -4,7 +4,7 @@ defmodule SudokuWeb.GameLive do
   @impl true
   def mount(_params, _session, socket) do
     board = Sudoku.Game.new_game!(:medium)
-    {:ok, assign(socket, board: board, page_title: "Sudoku", highlighted_number: nil, excluded_candidates: %{})}
+    {:ok, assign(socket, board: board, page_title: "Sudoku", highlighted_number: nil, excluded_candidates: %{}, mode: :playing, solution_count: nil)}
   end
 
   @impl true
@@ -42,7 +42,15 @@ defmodule SudokuWeb.GameLive do
           %{}
       end
 
-    {:noreply, assign(socket, board: board, excluded_candidates: excluded)}
+    mode =
+      case params do
+        %{"mode" => "manual_entry"} -> :manual_entry
+        _ -> :playing
+      end
+
+    solution_count = if mode == :manual_entry, do: compute_solution_count(board), else: nil
+
+    {:noreply, assign(socket, board: board, excluded_candidates: excluded, mode: mode, solution_count: solution_count)}
   end
 
   def handle_event("select_cell", %{"row" => row, "col" => col}, socket) do
@@ -61,14 +69,20 @@ defmodule SudokuWeb.GameLive do
 
       case Sudoku.Game.place_number(board, row, col, value) do
         {:ok, new_board} ->
-          # Clear exclusions for this cell when placing a value
           key = "#{row},#{col}"
           excluded = Map.delete(socket.assigns.excluded_candidates, key)
 
-          {:noreply,
-           socket
-           |> assign(board: new_board, excluded_candidates: excluded)
-           |> push_save(new_board, excluded)}
+          socket =
+            if socket.assigns.mode == :manual_entry do
+              solution_count = compute_solution_count(new_board)
+              assign(socket, board: new_board, excluded_candidates: excluded, solution_count: solution_count)
+            else
+              socket
+              |> assign(board: new_board, excluded_candidates: excluded)
+              |> push_save(new_board, excluded)
+            end
+
+          {:noreply, socket}
 
         {:error, _} ->
           {:noreply, socket}
@@ -142,7 +156,42 @@ defmodule SudokuWeb.GameLive do
   def handle_event("new_game", %{"difficulty" => difficulty}, socket) do
     board = Sudoku.Game.new_game!(String.to_existing_atom(difficulty))
     excluded = %{}
-    {:noreply, socket |> assign(board: board, highlighted_number: nil, excluded_candidates: excluded) |> push_save(board, excluded)}
+    {:noreply, socket |> assign(board: board, highlighted_number: nil, excluded_candidates: excluded, mode: :playing, solution_count: nil) |> push_save(board, excluded)}
+  end
+
+  def handle_event("start_manual_entry", _params, socket) do
+    cells =
+      for row <- 0..8, col <- 0..8 do
+        %Sudoku.Game.Cell{row: row, col: col, value: nil, given: false, valid: true}
+      end
+
+    board = %Sudoku.Game.Board{
+      id: Ash.UUID.generate(),
+      cells: cells,
+      status: :playing,
+      difficulty: :custom,
+      selected_row: nil,
+      selected_col: nil
+    }
+
+    {:noreply, assign(socket, board: board, mode: :manual_entry, highlighted_number: nil, excluded_candidates: %{}, solution_count: 0)}
+  end
+
+  def handle_event("finalize_board", _params, socket) do
+    board = socket.assigns.board
+
+    cells =
+      Enum.map(board.cells, fn c ->
+        if c.value, do: %{c | given: true}, else: c
+      end)
+
+    board = %{board | cells: cells}
+    excluded = %{}
+
+    {:noreply,
+     socket
+     |> assign(board: board, mode: :playing, excluded_candidates: excluded, solution_count: nil)
+     |> push_save(board, excluded)}
   end
 
   defp cell_classes(cell, board, blocked_cells) do
@@ -254,9 +303,22 @@ defmodule SudokuWeb.GameLive do
     number in cell_excluded
   end
 
-  defp push_save(socket, board, excluded) do
+  defp compute_solution_count(board) do
+    grid =
+      for row <- 0..8 do
+        for col <- 0..8 do
+          cell = Enum.find(board.cells, &(&1.row == row && &1.col == col))
+          cell.value || 0
+        end
+      end
+
+    Sudoku.Game.Solver.count_solutions(grid, 2)
+  end
+
+  defp push_save(socket, board, excluded, mode \\ :playing) do
     push_event(socket, "save_board", %{
       difficulty: board.difficulty,
+      mode: mode,
       cells:
         Enum.map(board.cells, fn c ->
           %{row: c.row, col: c.col, value: c.value, given: c.given, valid: c.valid}
