@@ -1,6 +1,6 @@
 <div id="sudoku-game" phx-hook="BoardPersistence" class="flex flex-col items-center gap-4 py-4 h-[calc(100vh-4rem)]" phx-window-keydown="keydown">
   <h1 class="text-3xl font-bold shrink-0">Sudoku</h1>
-
+  <Layouts.theme_toggle />
   <div :if={@board.status == :complete && @mode == :playing} class="alert alert-success w-auto shrink-0">
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -51,7 +51,7 @@
               <span
                 class={[
                   "flex items-center justify-center text-[clamp(0.3rem,1.2cqi,0.7rem)] leading-none cursor-pointer hover:bg-base-300/50 rounded-sm",
-                  if(excluded?(cell, n, @excluded_candidates), do: "text-base-content/15 line-through", else: "text-base-content/40")
+                  if(excluded?(cell, n, @excluded_candidates), do: "text-error/40 line-through", else: "text-base-content/40")
                 ]}
                 phx-click="toggle_candidate"
                 phx-value-row={cell.row}
