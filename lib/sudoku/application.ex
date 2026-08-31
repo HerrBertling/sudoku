@@ -8,6 +8,7 @@ defmodule Sudoku.Application do
   @impl true
   def start(_type, _args) do
     children = [
+      Sudoku.Repo,
       SudokuWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:sudoku, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Sudoku.PubSub},

@@ -18,6 +18,35 @@ defmodule Sudoku.Game.Solver do
     do_count(possibles, 0, limit)
   end
 
+  @doc """
+  Solves a grid, returning `{:ok, solution}` where solution maps `{row, col}`
+  to its digit, or `:error` if the grid cannot be completed.
+
+  Stops at the first solution found, so on a puzzle with more than one it
+  returns whichever the search reaches first.
+  """
+  def solve(grid) do
+    grid_map = grid_to_map(grid)
+    placed = for {position, value} <- grid_map, value != 0, into: %{}, do: {position, value}
+
+    case do_solve(initial_possibles(grid_map), placed) do
+      nil -> :error
+      solution -> {:ok, solution}
+    end
+  end
+
+  defp do_solve(possibles, placed) do
+    case pick_most_constrained(possibles) do
+      nil ->
+        placed
+
+      {{row, col}, candidates} ->
+        Enum.find_value(candidates, fn value ->
+          do_solve(propagate(possibles, row, col, value), Map.put(placed, {row, col}, value))
+        end)
+    end
+  end
+
   defp do_count(possibles, count, limit) do
     case pick_most_constrained(possibles) do
       nil ->
@@ -48,8 +77,8 @@ defmodule Sudoku.Game.Solver do
     box_c = div(col, 3) * 3
 
     peers =
-      (for c <- 0..8, c != col, do: {row, c}) ++
-        (for r <- 0..8, r != row, do: {r, col}) ++
+      for(c <- 0..8, c != col, do: {row, c}) ++
+        for(r <- 0..8, r != row, do: {r, col}) ++
         for(
           r <- box_r..(box_r + 2),
           c <- box_c..(box_c + 2),

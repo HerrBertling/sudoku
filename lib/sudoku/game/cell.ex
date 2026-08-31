@@ -43,16 +43,16 @@ defmodule Sudoku.Game.Cell do
   use Ash.Resource,
     data_layer: :embedded
 
+  actions do
+    default_accept :*
+    defaults [:read, create: :*]
+  end
+
   attributes do
     attribute :row, :integer, allow_nil?: false, public?: true, constraints: [min: 0, max: 8]
     attribute :col, :integer, allow_nil?: false, public?: true, constraints: [min: 0, max: 8]
     attribute :value, :integer, public?: true, constraints: [min: 1, max: 9]
     attribute :given, :boolean, default: false, public?: true
     attribute :valid, :boolean, default: true, public?: true
-  end
-
-  actions do
-    default_accept :*
-    defaults [:read, create: :*]
   end
 end

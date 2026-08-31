@@ -3,31 +3,6 @@ defmodule Sudoku.Game.Board do
     domain: Sudoku.Game,
     data_layer: Ash.DataLayer.Simple
 
-  attributes do
-    uuid_primary_key :id
-
-    attribute :cells, {:array, Sudoku.Game.Cell} do
-      allow_nil? false
-      default []
-      public? true
-    end
-
-    attribute :status, :atom do
-      constraints one_of: [:playing, :complete]
-      default :playing
-      public? true
-    end
-
-    attribute :difficulty, :atom do
-      constraints one_of: [:easy, :medium, :hard, :custom]
-      default :medium
-      public? true
-    end
-
-    attribute :selected_row, :integer, public?: true
-    attribute :selected_col, :integer, public?: true
-  end
-
   actions do
     default_accept :*
     defaults [:read]
@@ -49,9 +24,7 @@ defmodule Sudoku.Game.Board do
            id: Ash.UUID.generate(),
            cells: cells,
            status: :playing,
-           difficulty: difficulty,
-           selected_row: nil,
-           selected_col: nil
+           difficulty: difficulty
          }}
       end
     end
@@ -100,22 +73,27 @@ defmodule Sudoku.Game.Board do
         end
       end
     end
+  end
 
-    action :select_cell, :struct do
-      constraints instance_of: __MODULE__
+  attributes do
+    uuid_primary_key :id
 
-      argument :board, :struct do
-        allow_nil? false
-        constraints instance_of: __MODULE__
-      end
+    attribute :cells, {:array, Sudoku.Game.Cell} do
+      allow_nil? false
+      default []
+      public? true
+    end
 
-      argument :row, :integer, allow_nil?: false
-      argument :col, :integer, allow_nil?: false
+    attribute :status, :atom do
+      constraints one_of: [:playing, :complete]
+      default :playing
+      public? true
+    end
 
-      run fn input, _context ->
-        board = input.arguments.board
-        {:ok, %{board | selected_row: input.arguments.row, selected_col: input.arguments.col}}
-      end
+    attribute :difficulty, :atom do
+      constraints one_of: [:easy, :medium, :hard, :custom]
+      default :medium
+      public? true
     end
   end
 end

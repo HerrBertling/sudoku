@@ -53,12 +53,14 @@ defmodule Sudoku.MixProject do
         build: [
           "ash-framework": [
             # The description tells people how to use this skill.
-            description: "Use this skill working with Ash Framework or any of its extensions. Always consult this when making any domain changes, features or fixes.",
+            description:
+              "Use this skill working with Ash Framework or any of its extensions. Always consult this when making any domain changes, features or fixes.",
             # Include all Ash dependencies
             usage_rules: [:ash, ~r/^ash_/]
           ],
           "phoenix-framework": [
-            description: "Use this skill working with Phoenix Framework. Consult this when working with the web layer, controllers, views, liveviews etc.",
+            description:
+              "Use this skill working with Phoenix Framework. Consult this when working with the web layer, controllers, views, liveviews etc.",
             # Include all Phoenix dependencies
             usage_rules: [:phoenix, ~r/^phoenix_/]
           ]
@@ -72,6 +74,7 @@ defmodule Sudoku.MixProject do
   # Type `mix help deps` for examples and options.
   defp deps do
     [
+      {:ash_sqlite, "~> 0.2"},
       {:usage_rules, "~> 1.0", only: [:dev]},
       {:sourceror, "~> 1.8", only: [:dev, :test]},
       {:ash, "~> 3.0"},
@@ -110,7 +113,8 @@ defmodule Sudoku.MixProject do
   # See the documentation for `Mix` for more info on aliases.
   defp aliases do
     [
-      setup: ["deps.get", "assets.setup", "assets.build"],
+      setup: ["deps.get", "ash.setup", "assets.setup", "assets.build"],
+      test: ["ash.setup --quiet", "test"],
       "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
       "assets.build": ["compile", "tailwind sudoku", "esbuild sudoku"],
       "assets.deploy": [
@@ -118,7 +122,8 @@ defmodule Sudoku.MixProject do
         "esbuild sudoku --minify",
         "phx.digest"
       ],
-      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"]
+      precommit: ["compile --warnings-as-errors", "deps.unlock --unused", "format", "test"],
+      test: ["ash.setup --quiet", "test"]
     ]
   end
 end

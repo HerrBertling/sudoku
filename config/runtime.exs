@@ -51,6 +51,17 @@ if config_env() == :prod do
     ],
     secret_key_base: secret_key_base
 
+  database_path =
+    System.get_env("DATABASE_PATH") ||
+      raise """
+      environment variable DATABASE_PATH is missing.
+      For example: /data/sudoku.db
+      """
+
+  config :sudoku, Sudoku.Repo,
+    database: database_path,
+    pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10")
+
   # ## SSL Support
   #
   # To get SSL working, you will need to add the `https` key
