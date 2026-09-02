@@ -79,9 +79,11 @@ defmodule Sudoku.Game.Board do
       description "A freshly generated puzzle at the requested difficulty."
       accept []
 
-      argument :difficulty, :atom do
-        default :medium
-        constraints one_of: [:easy, :medium, :hard]
+      argument :difficulty, Sudoku.Game.Difficulty, default: :medium
+
+      # Every difficulty except the one that means "nobody generated this".
+      validate one_of(:difficulty, Sudoku.Game.Difficulty.generated()) do
+        message "is not a difficulty the generator deals"
       end
 
       change Sudoku.Game.Board.Changes.DealPuzzle
@@ -91,15 +93,8 @@ defmodule Sudoku.Game.Board do
       description "A board over a puzzle's givens and nothing else — no entries, no marks."
       accept []
 
-      argument :givens, :string do
-        default @blank_givens
-        constraints match: ~r/^[0-9]{81}$/
-      end
-
-      argument :difficulty, :atom do
-        default :custom
-        constraints one_of: [:easy, :medium, :hard, :custom]
-      end
+      argument :givens, Sudoku.Game.Puzzle.Givens, default: @blank_givens
+      argument :difficulty, Sudoku.Game.Difficulty, default: :custom
 
       change Sudoku.Game.Board.Changes.DecodeGivens
     end
@@ -147,8 +142,7 @@ defmodule Sudoku.Game.Board do
       public? true
     end
 
-    attribute :difficulty, :atom do
-      constraints one_of: [:easy, :medium, :hard, :custom]
+    attribute :difficulty, Sudoku.Game.Difficulty do
       default :medium
       public? true
     end

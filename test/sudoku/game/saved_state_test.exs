@@ -118,6 +118,15 @@ defmodule Sudoku.Game.SavedStateTest do
       assert restored.difficulty == :custom
       assert restored.mode == :playing
     end
+
+    test "a difficulty that is not even a word falls back instead of raising" do
+      payload = SavedState.to_payload(state())
+
+      assert {:ok, restored} =
+               SavedState.from_payload(%{payload | "difficulty" => %{"not" => "a word"}})
+
+      assert restored.difficulty == :custom
+    end
   end
 
   describe "the SQLite adapter" do

@@ -50,6 +50,8 @@ defmodule Sudoku.Game.SavedState do
   """
 
   alias Sudoku.Game.Cell
+  alias Sudoku.Game.Difficulty
+  alias Sudoku.Game.Mode
   alias Sudoku.Game.PencilMarks
   alias Sudoku.Game.Play
   alias Sudoku.Game.Puzzle
@@ -59,9 +61,6 @@ defmodule Sudoku.Game.SavedState do
   @version 2
 
   @cell_count 81
-
-  @difficulties [:easy, :medium, :hard, :custom]
-  @modes [:playing, :manual_entry]
 
   defstruct cells: [],
             difficulty: :custom,
@@ -261,20 +260,23 @@ defmodule Sudoku.Game.SavedState do
 
   # ── Atoms crossing the seam ──────────────────────────────────────────────
 
-  # Storage speaks strings, the game speaks atoms, and only these two functions
-  # know how to get from one to the other. Anything unrecognised falls back
-  # rather than raising: a save is not worth losing over a word the game no
-  # longer uses, and `String.to_existing_atom/1` on whatever a browser hands
-  # back is a way to crash a session.
-  defp difficulty(value) when value in @difficulties, do: value
-  defp difficulty(value) when is_binary(value), do: known(value, @difficulties, :custom)
-  defp difficulty(_value), do: :custom
+  # Storage speaks strings and the game speaks atoms; the types know how to get
+  # from one to the other, so this only has to say what happens when they
+  # cannot. Anything unrecognised falls back rather than raising: a save is not
+  # worth losing over a word the game no longer uses, and
+  # `String.to_existing_atom/1` on whatever a browser hands back is a way to
+  # crash a session.
+  defp difficulty(value), do: known(Difficulty, value, :custom)
+  defp mode(value), do: known(Mode, value, :playing)
 
-  defp mode(value) when value in @modes, do: value
-  defp mode(value) when is_binary(value), do: known(value, @modes, :playing)
-  defp mode(_value), do: :playing
-
-  defp known(value, allowed, fallback) do
-    Enum.find(allowed, fallback, &(Atom.to_string(&1) == value))
+  defp known(type, value, fallback) when is_atom(value) or is_binary(value) do
+    case type.match(value) do
+      {:ok, matched} -> matched
+      :error -> fallback
+    end
   end
+
+  # A payload can hand back anything at all, including something `to_string/1`
+  # would raise on.
+  defp known(_type, _value, fallback), do: fallback
 end

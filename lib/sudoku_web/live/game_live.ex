@@ -148,8 +148,10 @@ defmodule SudokuWeb.GameLive do
 
   # ── Game lifecycle ───────────────────────────────────────────────────────
 
+  # The difficulty arrives as a string; `Sudoku.Game.Difficulty` is what turns it
+  # back into an atom, and refuses anything that is not one.
   def handle_event("new_game", %{"difficulty" => difficulty}, socket) do
-    board = Sudoku.Game.new_game!(String.to_existing_atom(difficulty))
+    board = Sudoku.Game.new_game!(difficulty)
 
     {:noreply, socket |> assign(play: Play.new(board)) |> push_save()}
   end

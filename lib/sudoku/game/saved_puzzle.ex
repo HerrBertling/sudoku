@@ -38,10 +38,7 @@ defmodule Sudoku.Game.SavedPuzzle do
 
       # Not stored — a save is always a puzzle being played. It is here so the
       # rule about which plays may be saved lives with the saving.
-      argument :mode, :atom do
-        default :playing
-        constraints one_of: [:playing, :manual_entry]
-      end
+      argument :mode, Sudoku.Game.Mode, default: :playing
 
       validate argument_equals(:mode, :playing) do
         message "finalize the puzzle before saving it"
@@ -114,19 +111,17 @@ defmodule Sudoku.Game.SavedPuzzle do
       constraints min_length: 1, max_length: 100, trim?: true
     end
 
-    attribute :difficulty, :atom do
+    attribute :difficulty, Sudoku.Game.Difficulty do
       allow_nil? false
       default :custom
       public? true
-      constraints one_of: [:easy, :medium, :hard, :custom]
     end
 
     # The puzzle itself: 81 digits, "0" for a square left empty. Never changes
     # while the puzzle is played, so progress can always be wound back.
-    attribute :givens, :string do
+    attribute :givens, Sudoku.Game.Puzzle.Givens do
       allow_nil? false
       public? true
-      constraints match: ~r/^[0-9]{81}$/
     end
 
     # The working state: the player's entries on top of the givens.

@@ -267,7 +267,13 @@ defmodule Sudoku.Game.BoardTest do
     end
 
     test "new_game refuses a difficulty the generator does not deal" do
+      # Not a difficulty at all, and one that exists but is never generated.
       assert {:error, %Ash.Error.Invalid{}} = Sudoku.Game.new_game(:fiendish)
+      assert {:error, %Ash.Error.Invalid{}} = Sudoku.Game.new_game(:custom)
+    end
+
+    test "new_game takes the difficulty as a string, as the browser sends it" do
+      assert Sudoku.Game.new_game!("hard").difficulty == :hard
     end
 
     test "blank_board is a grid with nothing on it" do
