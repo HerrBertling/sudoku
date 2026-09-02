@@ -1,6 +1,8 @@
 defmodule Sudoku.Game.SavedPuzzleTest do
   use Sudoku.DataCase, async: false
 
+  alias Sudoku.Game.Board
+  alias Sudoku.Game.Play
   alias Sudoku.Game.Puzzle
 
   defp cells do
@@ -143,6 +145,58 @@ defmodule Sudoku.Game.SavedPuzzleTest do
       assert Puzzle.given_count(Puzzle.encode(puzzle)) == 1
       assert Puzzle.blank_count(Puzzle.encode(puzzle)) == 80
       assert Puzzle.solved_count(played) == 1
+    end
+  end
+
+  describe "restart" do
+    test "gives back the puzzle as it was set" do
+      puzzle = List.update_at(cells(), 0, &%{&1 | value: 7, given: true})
+      played = List.update_at(puzzle, 1, &%{&1 | value: 4})
+
+      saved =
+        save(unique_name("restart-action"), %{
+          cells: played,
+          givens: Puzzle.encode(puzzle),
+          difficulty: :hard
+        })
+
+      board = Sudoku.Game.restart_saved_puzzle!(saved)
+
+      assert %Board{} = board
+      assert board.difficulty == :hard
+      # The given survives; the player's 4 does not.
+      assert Board.cell_at(board, {0, 0}).value == 7
+      assert Board.cell_at(board, {0, 1}).value == nil
+    end
+
+    test "leaves the save's own progress alone" do
+      played = List.update_at(cells(), 1, &%{&1 | value: 4})
+      saved = save(unique_name("restart-keeps"), %{cells: played, givens: Puzzle.encode(cells())})
+
+      Sudoku.Game.restart_saved_puzzle!(saved)
+
+      assert Enum.at(Sudoku.Game.get_saved_puzzle!(saved.id).cells, 1).value == 4
+    end
+  end
+
+  describe "resume" do
+    test "gives back the puzzle as it was left" do
+      played = List.update_at(cells(), 1, &%{&1 | value: 4})
+
+      saved =
+        save(unique_name("resume-action"), %{
+          cells: played,
+          corner_marks: %{"0,2" => [2, 7]},
+          elapsed_seconds: 137
+        })
+
+      play = Sudoku.Game.resume_saved_puzzle!(saved)
+
+      assert %Play{} = play
+      assert play.mode == :playing
+      assert play.elapsed == 137
+      assert Board.cell_at(play.board, {0, 1}).value == 4
+      assert play.corner_marks == %{"0,2" => MapSet.new([2, 7])}
     end
   end
 

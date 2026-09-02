@@ -4,6 +4,9 @@ defmodule Sudoku.Game.Generator do
   applying Sudoku-preserving transformations, then removing cells based on difficulty.
   """
 
+  alias Sudoku.Game.Cell
+  alias Sudoku.Game.Solver
+
   @base_board [
     [5, 3, 4, 6, 7, 8, 9, 1, 2],
     [6, 7, 2, 1, 9, 5, 3, 4, 8],
@@ -63,40 +66,37 @@ defmodule Sudoku.Game.Generator do
     board |> Enum.zip() |> Enum.map(&Tuple.to_list/1)
   end
 
+  # The shuffling above is naturally row-shaped; from here on the puzzle is a
+  # flat list of cells, which is what the solver and the rest of the app speak.
   defp remove_cells(board, target_removals) do
-    grid = board_to_grid(board)
+    cells =
+      for {row_vals, row} <- Enum.with_index(board),
+          {val, col} <- Enum.with_index(row_vals) do
+        %Cell{row: row, col: col, value: val, given: true, valid: true}
+      end
+
     shuffled = Enum.shuffle(for r <- 0..8, c <- 0..8, do: {r, c})
 
-    final_grid = remove_one_at_a_time(grid, shuffled, 0, target_removals)
-
-    for {row_vals, row} <- Enum.with_index(final_grid),
-        {val, col} <- Enum.with_index(row_vals) do
-      given = val != 0
-
-      %Sudoku.Game.Cell{
-        row: row,
-        col: col,
-        value: if(given, do: val, else: nil),
-        given: given,
-        valid: true
-      }
-    end
+    remove_one_at_a_time(cells, shuffled, 0, target_removals)
   end
 
-  defp remove_one_at_a_time(grid, _positions, removed, target) when removed >= target, do: grid
-  defp remove_one_at_a_time(grid, [], _removed, _target), do: grid
+  defp remove_one_at_a_time(cells, _positions, removed, target) when removed >= target, do: cells
+  defp remove_one_at_a_time(cells, [], _removed, _target), do: cells
 
-  defp remove_one_at_a_time(grid, [{r, c} | rest], removed, target) do
-    candidate = List.update_at(grid, r, fn row -> List.replace_at(row, c, 0) end)
+  defp remove_one_at_a_time(cells, [{r, c} | rest], removed, target) do
+    candidate =
+      List.replace_at(cells, r * 9 + c, %Cell{
+        row: r,
+        col: c,
+        value: nil,
+        given: false,
+        valid: true
+      })
 
-    if Sudoku.Game.Solver.count_solutions(candidate, 2) == 1 do
+    if Solver.count_solutions(candidate, 2) == 1 do
       remove_one_at_a_time(candidate, rest, removed + 1, target)
     else
-      remove_one_at_a_time(grid, rest, removed, target)
+      remove_one_at_a_time(cells, rest, removed, target)
     end
-  end
-
-  defp board_to_grid(board) do
-    Enum.map(board, fn row -> Enum.map(row, & &1) end)
   end
 end

@@ -3,6 +3,8 @@ defmodule Sudoku.Game.Validator do
   Validates Sudoku board state by checking row, column, and box constraints.
   """
 
+  alias Sudoku.Game.Position
+
   def validate_cells(cells) do
     conflicts = find_all_conflicts(cells)
 
@@ -16,7 +18,7 @@ defmodule Sudoku.Game.Validator do
 
     row_conflicts = find_group_conflicts(filled, & &1.row)
     col_conflicts = find_group_conflicts(filled, & &1.col)
-    box_conflicts = find_group_conflicts(filled, fn c -> div(c.row, 3) * 3 + div(c.col, 3) end)
+    box_conflicts = find_group_conflicts(filled, fn c -> Position.box({c.row, c.col}) end)
 
     MapSet.union(row_conflicts, col_conflicts) |> MapSet.union(box_conflicts)
   end

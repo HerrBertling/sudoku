@@ -25,11 +25,10 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/sudoku"
 import topbar from "../vendor/topbar"
 
+// The payload is opaque here: the server stamps it with a version and
+// Sudoku.Game.SavedState is the only thing that reads one. When it cannot read
+// a payload it says so with a `clear_board` event.
 const STORAGE_KEY = "sudoku_board"
-// Bumped when the saved shape changes; older payloads are discarded rather
-// than migrated. v2 replaced auto-computed `excluded` candidates with
-// player-authored `corner_marks` / `center_marks`.
-const STORAGE_VERSION = 2
 
 const DIGIT_CODE = /^(Digit|Numpad)[1-9]$/
 
@@ -76,12 +75,7 @@ const BoardPersistence = {
     if (!saved) { return }
 
     try {
-      const data = JSON.parse(saved)
-      if (data.version !== STORAGE_VERSION) {
-        localStorage.removeItem(STORAGE_KEY)
-        return
-      }
-      this.pushEvent("restore_board", data)
+      this.pushEvent("restore_board", JSON.parse(saved))
     } catch (_) {
       localStorage.removeItem(STORAGE_KEY)
     }
@@ -100,6 +94,8 @@ const BoardSelection = {
       const el = document.elementFromPoint(x, y)
       return el && el.closest("[data-cell]")
     }
+    // `data-cell` carries the position as "row,col"; Sudoku.Game.Position owns
+    // that format on the server side.
     const coords = (cell) => {
       const [row, col] = cell.dataset.cell.split(",")
       return {row, col}

@@ -36,7 +36,7 @@ defmodule Sudoku.Game.Cell do
   top-to-bottom):
 
       iex> cell = %Sudoku.Game.Cell{row: 4, col: 7}
-      iex> div(cell.row, 3) * 3 + div(cell.col, 3)
+      iex> Sudoku.Game.Position.box({cell.row, cell.col})
       5
   """
 

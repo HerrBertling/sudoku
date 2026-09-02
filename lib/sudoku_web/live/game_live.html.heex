@@ -11,40 +11,46 @@
     <button
       class="btn btn-ghost btn-sm gap-1 font-mono tabular-nums"
       phx-click="toggle_timer"
-      title={if @timer_running, do: "Pause the clock", else: "Resume the clock"}
+      title={if @play.timer_running, do: "Pause the clock", else: "Resume the clock"}
     >
-      <span class={if @timer_running, do: "", else: "opacity-50"}>
-        {format_elapsed(@elapsed)}
+      <span class={if @play.timer_running, do: "", else: "opacity-50"}>
+        {format_elapsed(@play.elapsed)}
       </span>
-      <span class={["size-3", if(@timer_running, do: "hero-pause-micro", else: "hero-play-micro")]} />
+      <span class={[
+        "size-3",
+        if(@play.timer_running, do: "hero-pause-micro", else: "hero-play-micro")
+      ]} />
     </button>
     <Layouts.theme_toggle />
   </div>
 
   <div
-    :if={@board.status == :complete && @mode == :playing}
+    :if={Board.complete?(@play.board) && @play.mode == :playing}
     class="alert alert-success w-auto shrink-0 py-1 px-3"
   >
     <span class="text-lg font-semibold">Puzzle Complete!</span>
   </div>
 
-  <div :if={@mode == :manual_entry} class="flex items-center gap-2 shrink-0">
-    <div :if={@solution_count == 0} class="alert alert-error w-auto py-1 px-3">
+  <div :if={@play.mode == :manual_entry} class="flex items-center gap-2 shrink-0">
+    <div :if={@play.solution_count == 0} class="alert alert-error w-auto py-1 px-3">
       <span class="text-sm font-semibold">No solutions — check your entries</span>
     </div>
-    <div :if={@solution_count == 2} class="alert alert-warning w-auto py-1 px-3">
+    <div :if={@play.solution_count == 2} class="alert alert-warning w-auto py-1 px-3">
       <span class="text-sm font-semibold">Multiple solutions — add more numbers</span>
     </div>
-    <div :if={@solution_count == 1} class="alert alert-success w-auto py-1 px-3">
+    <div :if={@play.solution_count == 1} class="alert alert-success w-auto py-1 px-3">
       <span class="text-sm font-semibold">Unique solution</span>
     </div>
-    <button :if={@solution_count == 1} class="btn btn-primary btn-sm" phx-click="finalize_board">
+    <button
+      :if={@play.solution_count == 1}
+      class="btn btn-primary btn-sm"
+      phx-click="finalize_board"
+    >
       Finalize
     </button>
   </div>
 
   <div class="flex-1 min-h-0 w-full flex items-center justify-center">
-    <% blocked = blocked_cells_for(@highlighted_number, @board) %>
     <%!-- The padding gives the row/column labels somewhere to sit without
           disturbing the square the grid needs to stay. --%>
     <div class="h-full max-h-full pt-4 pl-4 box-border">
@@ -72,15 +78,15 @@
           class="grid grid-cols-9 border-2 border-base-content rounded h-full w-full touch-none"
         >
           <div
-            :for={cell <- @board.cells}
-            data-cell={"#{cell.row},#{cell.col}"}
-            class={cell_classes(cell, assigns, blocked)}
+            :for={cell <- @play.board.cells}
+            data-cell={Position.key({cell.row, cell.col})}
+            class={cell_classes(cell, @play)}
           >
             <span :if={cell.value} class="text-[clamp(0.75rem,3cqi,2rem)]">{cell.value}</span>
 
-            <%= if is_nil(cell.value) && @mode == :playing do %>
-              <% corner = marks_at(@corner_marks, cell) %>
-              <% center = marks_at(@center_marks, cell) %>
+            <%= if is_nil(cell.value) && @play.mode == :playing do %>
+              <% corner = marks_at(@play.corner_marks, cell) %>
+              <% center = marks_at(@play.center_marks, cell) %>
 
               <div :if={corner != []} class="absolute inset-0 grid grid-cols-3 grid-rows-3 p-[6%]">
                 <span
@@ -112,13 +118,13 @@
     </div>
   </div>
 
-  <div :if={@mode == :playing} class="flex flex-col items-center gap-2 shrink-0">
+  <div :if={@play.mode == :playing} class="flex flex-col items-center gap-2 shrink-0">
     <div class="join">
       <button
         :for={m <- [:normal, :corner, :center, :highlight]}
         class={[
           "btn btn-sm join-item",
-          if(@input_mode == m, do: "btn-primary", else: "btn-outline")
+          if(@play.input_mode == m, do: "btn-primary", else: "btn-outline")
         ]}
         phx-click="set_input_mode"
         phx-value-mode={m}
@@ -128,14 +134,13 @@
     </div>
 
     <div class="flex gap-1">
-      <% remaining = remaining_counts(@board) %>
       <button
         :for={n <- 1..9}
         class={[
           "btn btn-sm min-w-[2.5rem] flex-col gap-0 leading-none h-9",
           cond do
-            @input_mode == :highlight && @highlighted_number == n -> "btn-warning"
-            remaining[n] == 0 -> "btn-outline opacity-40"
+            @play.input_mode == :highlight && @play.highlighted_number == n -> "btn-warning"
+            @play.remaining_counts[n] == 0 -> "btn-outline opacity-40"
             true -> "btn-outline"
           end
         ]}
@@ -143,7 +148,7 @@
         phx-value-number={n}
       >
         <span>{n}</span>
-        <span class="text-[0.55rem] opacity-60">{remaining[n]}</span>
+        <span class="text-[0.55rem] opacity-60">{@play.remaining_counts[n]}</span>
       </button>
       <button class="btn btn-sm btn-outline h-9" phx-click="input_number" phx-value-number="clear">
         Clear
@@ -154,7 +159,7 @@
       <button
         class="btn btn-xs btn-outline"
         phx-click="undo"
-        disabled={@history == []}
+        disabled={@play.history == []}
         title="Undo (Ctrl+Z)"
       >
         Undo
@@ -162,7 +167,7 @@
       <button
         class="btn btn-xs btn-outline"
         phx-click="redo"
-        disabled={@future == []}
+        disabled={@play.future == []}
         title="Redo (Ctrl+Y)"
       >
         Redo
@@ -198,14 +203,14 @@
     <div class="modal-box max-w-2xl flex flex-col gap-3">
       <h2 class="font-bold text-lg">Saved puzzles</h2>
 
-      <p :if={@mode == :manual_entry} class="text-sm text-base-content/70">
+      <p :if={@play.mode == :manual_entry} class="text-sm text-base-content/70">
         Finish entering this puzzle and press <span class="font-semibold">Finalize</span>
         before saving it. Your entries are kept
         in this browser meanwhile, so a refresh won't lose them.
       </p>
 
       <.form
-        :if={@mode == :playing}
+        :if={@play.mode == :playing}
         for={@save_form}
         id="save-puzzle-form"
         phx-submit="save_puzzle"
@@ -296,11 +301,14 @@
     <div class="modal-backdrop" phx-click="toggle_saves"></div>
   </div>
 
-  <p :if={@mode == :playing} class="text-xs text-base-content/60 shrink-0 text-center px-2">
+  <p :if={@play.mode == :playing} class="text-xs text-base-content/60 shrink-0 text-center px-2">
     Click a cell, then type <span class="font-semibold">1–9</span>. <span class="font-semibold">Shift</span>+digit writes a corner mark, <span class="font-semibold">Ctrl</span>+digit a centre mark — and <span class="font-semibold">Shift</span>/<span class="font-semibold">Ctrl</span>+Backspace clears
     just those. Space cycles modes; Backspace empties the cell.
   </p>
-  <p :if={@mode == :manual_entry} class="text-xs text-base-content/60 shrink-0 text-center px-2">
+  <p
+    :if={@play.mode == :manual_entry}
+    class="text-xs text-base-content/60 shrink-0 text-center px-2"
+  >
     Enter givens: click a cell and type 1–9 (Backspace to clear).
     Finalize when the puzzle has a unique solution.
   </p>
