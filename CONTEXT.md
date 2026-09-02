@@ -24,10 +24,10 @@ Every position has exactly 20 peers, and a position is *not* its own peer. Where
 the UI wants "this square and everything it sees", it adds the position itself
 explicitly.
 
-**Board** — the 81 cells as a playable whole, plus its difficulty and whether it is
-finished. `Sudoku.Game.Board` owns building one — from cells or from a puzzle's
-givens — writing digits into it, and answering for its own state: which cell sits
-at a position, and whether it is complete.
+**Board** — the 81 cells as a playable whole: a **Game**'s givens with a
+**Sitting**'s entries written over them, and whether the result is finished. This
+is what the rules apply to and what the player looks at. It belongs to neither
+side on its own — it is composed from both, which is why it is never stored.
 
 **Refusal** — a position a placement would not write to, paired with the reason:
 the square is a **given**, the board is already complete, or the position is not
@@ -41,9 +41,14 @@ whole move.
 are what makes a puzzle *that* puzzle.
 
 **Puzzle** — the definition alone: the 81 givens, encoded as a string of digits with
-`"0"` for a square left empty, read left to right then top to bottom. A puzzle never
-changes while it is played. Distinct from the **working state** — the player's
-entries on top of it. Keeping the two apart is what lets a game be wound back.
+`"0"` for a square left empty, read left to right then top to bottom. A format, not
+a thing you can point at: two identical strings are the same puzzle. A **Game** is
+what gives a puzzle identity.
+
+**Game** — a puzzle in the library: a name, a difficulty, and the **Puzzle** itself.
+What was *set*, as opposed to what a player did about it. A Game has identity, and
+that is the whole point of the word — it is what lets two **Sittings** be attempts
+at the same thing. A Game never changes once created.
 
 **Candidate** — a digit that could legally occupy an empty square, given the digits
 already placed. Derived from the rules, not from the player.
@@ -53,6 +58,14 @@ puzzles preserve it while removing givens; hand-entered puzzles are checked for 
 before they can be finalized.
 
 ## Playing
+
+**Sitting** — one attempt at a **Game**: the entries written over its givens, the
+**pencil marks**, the time spent, the **selection** and cursor, the **input mode**,
+the undo history and the last **Check**. Everything here is the player's, not the
+puzzle's — which is why two Sittings on the same Game are independent and do not
+see each other's work, right down to having a clock each.
+
+The line between Game and Sitting is "who put it there": the puzzle, or me.
 
 **Pencil mark** — a note the *player* writes in an empty cell. Never derived by the
 program; a cell stays empty until the player marks it. Two kinds, and the difference
@@ -73,37 +86,29 @@ that digit. Clearing follows whatever the current mode writes.
 across a selection *as a group*: it goes onto every eligible cell unless they all
 carry it already, in which case it comes off all of them.
 
+**Check** — a verdict, asked for on demand: which of the player's entries contradict
+the puzzle's own solution. Distinct from the conflict flags a **Cell** carries, which
+only notice two entries colliding. A Check is *remembered* and goes stale — the next
+change to the board invalidates it, because carrying it over would point at cells the
+player has since fixed.
+
 **Manual entry** — entering a puzzle's givens by hand, with live feedback on how many
-solutions the grid has. Finalizing turns the entered digits into givens and starts
-play.
-
-## Storage
-
-**Saved puzzle** — a named puzzle kept on disk, holding both the puzzle definition
-and the working state written over it, plus pencil marks and elapsed time. Saving
-under an existing name replaces that save.
-
-**Restart** — rebuilding a board from a saved puzzle's definition, discarding the
-working state. The stored progress is untouched until it is saved over.
-
-**Saved state** — the part of a **play** worth keeping when nobody is looking at
-the board: its cells and difficulty, whether the puzzle is still being entered by
-hand, the pencil marks and the clock. Not the selection, the undo history or the
-last Check, which belong to the sitting. `Sudoku.Game.SavedState` owns the list
-and both ways of writing it down — the browser's storage and a **saved puzzle**'s
-row — so the two cannot drift apart, and it owns the version stamped on what the
-browser keeps. `Sudoku.Game.PencilMarks` owns the mark half of that shape, and is
-also the type of a saved puzzle's mark columns.
-
-**Play** — a board while somebody is sitting in front of it: the board itself plus
-the selection, both kinds of pencil mark, the input mode, the undo history, the
-clock, the last Check and, during manual entry, the solution count.
-`Sudoku.Game.Play` owns all of it as plain data, so a move is a function from one
-play to the next. A **Board** is a puzzle and its cells; a play is a board being
-played.
+solutions the grid has. Finalizing turns the entered digits into givens, which is the
+moment a **Game** comes into existence.
 
 **Intent** — what the player meant, expressed without reference to how they said
 it: "corner-mark a 2 across the selection", not "Shift plus the Digit2 key".
-`Play.act/2` takes one and returns the play that follows. Deciding which key means
-which intent is the web layer's job, because that is knowledge about keyboards
-rather than about Sudoku.
+Deciding which key means which intent is the web layer's job, because that is
+knowledge about keyboards rather than about Sudoku.
+
+## Storage
+
+**Saved state** — the part of a **Sitting** worth keeping when nobody is looking at
+the board: the entries, the pencil marks and the time spent. Not the selection, the
+undo history or the last **Check**, which last only as long as the tab. One
+definition, written down two ways — the browser's storage and a row on disk — so the
+two cannot drift apart.
+
+**Restart** — starting a *new* **Sitting** on a **Game**, discarding the one you had.
+The Game is untouched: it was only ever the givens. Distinct from loading, which
+resumes an existing Sitting.
